@@ -34,10 +34,12 @@
 - [x] git-loop
 - [x] deploy-loop
 
-## Fase 5 — Catálogo de Projetos
-- [ ] Registro de projetos
-- [ ] Metadados
-- [ ] Histórico
+## Fase 5 — Catálogo de Projetos ✅
+- [x] Registro de projetos (catalog.json)
+- [x] Schema de validação (registry.schema.json)
+- [x] Metadados completos
+- [x] Templates (web-app, api, mobile-app)
+- [x] Histórico
 
 ## Fase 6 — CLI Workspace
 - [ ] workspace init
