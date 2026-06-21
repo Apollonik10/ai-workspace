@@ -714,6 +714,20 @@ function cmdRag(args) {
   console.log(`Subcomandos disponíveis: index, query`);
 }
 
+function cmdMcp(args) {
+  const subCommand = args[0]?.toLowerCase();
+  
+  if (subCommand === 'start') {
+    const serverPath = path.join(WORKSPACE_ROOT, 'mcp', 'server.js');
+    console.log(`${colors.green}Iniciando servidor MCP via stdio...${colors.reset}`);
+    import(serverPath);
+    return;
+  }
+  
+  console.log(`${colors.red}Comando 'mcp ${subCommand}' não reconhecido.${colors.reset}`);
+  console.log(`Subcomandos disponíveis: start`);
+}
+
 function showHelp() {
   console.log(`
 ${colors.bright}AI Workspace CLI${colors.reset} - Gerencie seu ecossistema modular de IA
@@ -735,6 +749,7 @@ ${colors.bright}Comandos Disponíveis:${colors.reset}
   ${colors.yellow}loop${colors.reset}       Gerencia os loops do workspace (list, add, remove)
   ${colors.blue}docs${colors.reset}       Gerencia os documentos da pasta docs/ (list, add)
   ${colors.magenta}rag${colors.reset}        Interface RAG de pesquisa contextual (index, query)
+  ${colors.cyan}mcp${colors.reset}        Gerencia e inicia o servidor MCP do workspace (start)
 
 ${colors.bright}Opções:${colors.reset}
   -h, --help Exibe esta mensagem de ajuda
@@ -786,6 +801,9 @@ function main() {
       break;
     case 'rag':
       cmdRag(args.slice(1));
+      break;
+    case 'mcp':
+      cmdMcp(args.slice(1));
       break;
     default:
       console.log(`${colors.red}Erro: Comando "${command}" não reconhecido.${colors.reset}`);

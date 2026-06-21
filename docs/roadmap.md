@@ -53,11 +53,11 @@
 - [x] Busca semântica
 - [x] Consulta contextual
 
-## Fase 8 — MCP
-- [ ] GitHub
-- [ ] Vercel
-- [ ] Firebase
-- [ ] APIs externas
+## Fase 8 — MCP ✅
+- [x] GitHub
+- [x] Vercel
+- [x] Firebase
+- [x] APIs externas
 
 ## Fase 9 — Modelos
 - [ ] Mimo

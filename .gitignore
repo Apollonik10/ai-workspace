@@ -3,3 +3,5 @@
 node_modules/
 .DS_Store
 rag/index.json
+mcp/mcp-server.log
+
