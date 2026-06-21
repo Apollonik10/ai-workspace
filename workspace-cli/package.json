@@ -1,0 +1,20 @@
+{
+  "name": "workspace-cli",
+  "version": "0.1.0",
+  "description": "Interface de linha de comando para gerenciamento do AI Workspace",
+  "type": "module",
+  "bin": {
+    "workspace": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "cli",
+    "workspace",
+    "ai",
+    "automation"
+  ],
+  "author": "",
+  "license": "ISC"
+}

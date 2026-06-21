@@ -41,12 +41,12 @@
 - [x] Templates (web-app, api, mobile-app)
 - [x] Histórico
 
-## Fase 6 — CLI Workspace
-- [ ] workspace init
-- [ ] workspace project
-- [ ] workspace agent
-- [ ] workspace loop
-- [ ] workspace docs
+## Fase 6 — CLI Workspace ✅
+- [x] workspace init
+- [x] workspace project
+- [x] workspace agent
+- [x] workspace loop
+- [x] workspace docs
 
 ## Fase 7 — RAG
 - [ ] Indexação de documentos
