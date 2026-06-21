@@ -48,10 +48,10 @@
 - [x] workspace loop
 - [x] workspace docs
 
-## Fase 7 — RAG
-- [ ] Indexação de documentos
-- [ ] Busca semântica
-- [ ] Consulta contextual
+## Fase 7 — RAG ✅
+- [x] Indexação de documentos
+- [x] Busca semântica
+- [x] Consulta contextual
 
 ## Fase 8 — MCP
 - [ ] GitHub

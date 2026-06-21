@@ -3,6 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { buildIndex, search } from '../rag/rag.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -666,6 +667,53 @@ Descreva aqui o propósito do documento.
   }
 }
 
+function cmdRag(args) {
+  const subCommand = args[0]?.toLowerCase();
+  
+  if (subCommand === 'index') {
+    buildIndex();
+    return;
+  }
+  
+  if (subCommand === 'query' || subCommand === 'search') {
+    const query = args.slice(1).join(' ');
+    if (!query) {
+      console.log(`\n${colors.red}Erro: Comando 'query' requer um termo de busca.${colors.reset}`);
+      console.log(`Uso: workspace rag query <termo-de-busca>\n`);
+      return;
+    }
+    
+    console.log(`\n${colors.bright}${colors.cyan}=========================================`);
+    console.log(`         BUSCA RAG CONTEXTUAL`);
+    console.log(`=========================================${colors.reset}\n`);
+    console.log(`${colors.dim}Query:${colors.reset} "${query}"\n`);
+    
+    const results = search(query, 3);
+    
+    if (results.length === 0) {
+      console.log(`  ${colors.yellow}Nenhum resultado relevante encontrado no workspace.${colors.reset}\n`);
+    } else {
+      results.forEach((r, idx) => {
+        console.log(`${colors.bright}${idx + 1}. ${r.title}${colors.reset} (Score: ${r.score.toFixed(2)})`);
+        console.log(`${colors.dim}Origem: ${r.file}${colors.reset}`);
+        console.log(`-----------------------------------------`);
+        const indentedContent = r.content
+          .split('\n')
+          .map(line => '  ' + line)
+          .join('\n');
+        console.log(indentedContent);
+        console.log(`-----------------------------------------\n`);
+      });
+    }
+    
+    console.log(`${colors.bright}${colors.cyan}=========================================${colors.reset}\n`);
+    return;
+  }
+  
+  console.log(`${colors.red}Comando 'rag ${subCommand}' não reconhecido.${colors.reset}`);
+  console.log(`Subcomandos disponíveis: index, query`);
+}
+
 function showHelp() {
   console.log(`
 ${colors.bright}AI Workspace CLI${colors.reset} - Gerencie seu ecossistema modular de IA
@@ -686,6 +734,7 @@ ${colors.bright}Comandos Disponíveis:${colors.reset}
   ${colors.cyan}agent${colors.reset}      Gerencia os agentes do workspace (list, add, remove)
   ${colors.yellow}loop${colors.reset}       Gerencia os loops do workspace (list, add, remove)
   ${colors.blue}docs${colors.reset}       Gerencia os documentos da pasta docs/ (list, add)
+  ${colors.magenta}rag${colors.reset}        Interface RAG de pesquisa contextual (index, query)
 
 ${colors.bright}Opções:${colors.reset}
   -h, --help Exibe esta mensagem de ajuda
@@ -734,6 +783,9 @@ function main() {
       break;
     case 'docs':
       cmdDocs(args.slice(1));
+      break;
+    case 'rag':
+      cmdRag(args.slice(1));
       break;
     default:
       console.log(`${colors.red}Erro: Comando "${command}" não reconhecido.${colors.reset}`);
