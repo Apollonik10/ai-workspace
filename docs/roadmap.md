@@ -18,6 +18,7 @@
 - [x] backend.skill.md
 - [x] firebase.skill.md
 - [x] vercel.skill.md
+- [x] session-close.skill.md
 
 ## Fase 3 — Agentes ✅
 - [x] planner-agent
@@ -59,14 +60,26 @@
 - [x] Firebase
 - [x] APIs externas
 
-## Fase 9 — Modelos
-- [ ] Mimo
-- [ ] Gemini
-- [ ] NVIDIA NIM
-- [ ] OpenRouter
+## Fase 9 — Modelos ✅
+- [x] Mimo (roteador inteligente multi-provedor)
+- [x] Gemini (Google AI — gemini-2.0-flash, gemini-1.5-pro)
+- [x] NVIDIA NIM (llama3-70b, mistral, codestral)
+- [x] OpenRouter (100+ modelos, acesso unificado)
+- [x] OpenAI (gpt-4o, gpt-4o-mini)
+- [x] DeepSeek (deepseek-chat, deepseek-coder)
+- [x] Grok (xAI — grok-beta)
+- [x] providers.json (catálogo completo de modelos)
+- [x] Comando CLI: workspace models
 
-## Fase 10 — Multiagentes
-- [ ] Pipeline autônomo Planner → Frontend → Backend → Review → Fix → Deploy
+## Fase 10 — Multiagentes ✅
+- [x] Pipeline autônomo Planner → Frontend → Backend → Review → Fix → Deploy
+- [x] Contexto compartilhado entre agentes
+- [x] System prompts especializados por agente
+- [x] Roteamento inteligente (skip Fix se aprovado)
+- [x] Retry automático por agente (2 tentativas)
+- [x] Sessões persistidas em JSON (multiagent/sessions/)
+- [x] Presets: fast, quality, full
+- [x] Comando CLI: workspace pipeline run/sessions/session
 
 ## Fase 11 — Interface PWA
 - [ ] Dashboard

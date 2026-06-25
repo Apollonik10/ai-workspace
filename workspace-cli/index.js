@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildIndex, search } from '../rag/rag.js';
+import { listModels, testProvider, detectAvailableProviders } from '../models/client.js';
+import { runPipeline, listSessions, getSession } from '../multiagent/orchestrator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -728,6 +730,214 @@ function cmdMcp(args) {
   console.log(`Subcomandos disponíveis: start`);
 }
 
+async function cmdModels(args) {
+  const subCommand = args[0]?.toLowerCase();
+
+  // ── workspace models available ──────────────────────────────────────────
+  if (subCommand === 'available') {
+    const available = detectAvailableProviders();
+    console.log(`\n${colors.bright}${colors.magenta}=========================================`);
+    console.log(`       PROVEDORES CONFIGURADOS (.env)`);
+    console.log(`=========================================${colors.reset}\n`);
+    if (available.length === 0) {
+      console.log(`  ${colors.yellow}Nenhum provedor configurado. Adicione chaves de API ao .env${colors.reset}\n`);
+    } else {
+      available.forEach(p => {
+        const tag = p === 'mimo' ? `${colors.cyan}[roteador]${colors.reset}` : `${colors.green}[ativo]${colors.reset}`;
+        console.log(`  ${colors.bright}${p}${colors.reset}  ${tag}`);
+      });
+    }
+    console.log(`\n${colors.bright}${colors.magenta}=========================================${colors.reset}\n`);
+    return;
+  }
+
+  // ── workspace models test [provedor] ───────────────────────────────────
+  if (subCommand === 'test') {
+    const target = args[1]?.toLowerCase();
+    const available = detectAvailableProviders().filter(p => p !== 'mimo');
+    const toTest = target ? [target] : available;
+
+    console.log(`\n${colors.bright}${colors.cyan}=========================================`);
+    console.log(`           TESTE DE PROVEDORES`);
+    console.log(`=========================================${colors.reset}\n`);
+
+    if (toTest.length === 0) {
+      console.log(`  ${colors.yellow}Nenhum provedor disponível para testar.${colors.reset}\n`);
+      return;
+    }
+
+    for (const prov of toTest) {
+      process.stdout.write(`  Testando ${colors.bright}${prov}${colors.reset}... `);
+      const result = await testProvider(prov);
+      if (result.ok) {
+        console.log(`${colors.green}✔ OK${colors.reset} (${result.latencyMs}ms) — modelo: ${colors.dim}${result.model}${colors.reset}`);
+      } else {
+        console.log(`${colors.red}✘ FALHOU${colors.reset} — ${colors.dim}${result.error}${colors.reset}`);
+      }
+    }
+    console.log(`\n${colors.bright}${colors.cyan}=========================================${colors.reset}\n`);
+    return;
+  }
+
+  // ── workspace models (list) ────────────────────────────────────────────
+  const catalogue = listModels();
+  const providers = catalogue.providers || {};
+
+  console.log(`\n${colors.bright}${colors.magenta}=========================================`);
+  console.log(`        CATÁLOGO DE MODELOS DE IA`);
+  console.log(`=========================================${colors.reset}\n`);
+
+  const available = detectAvailableProviders();
+
+  Object.entries(providers).forEach(([key, prov]) => {
+    const isAvailable = available.includes(key);
+    const statusBadge = isAvailable
+      ? `${colors.green}● configurado${colors.reset}`
+      : `${colors.dim}○ sem chave${colors.reset}`;
+
+    console.log(`${colors.bright}${colors.magenta}${prov.name}${colors.reset}  (${colors.dim}${key}${colors.reset})  ${statusBadge}`);
+    console.log(`  ${colors.dim}${prov.description}${colors.reset}`);
+    if (prov.env_key) {
+      console.log(`  Chave: ${colors.dim}${prov.env_key}${colors.reset}`);
+    }
+    if (Array.isArray(prov.models) && prov.models.length > 0 && typeof prov.models[0] === 'object') {
+      console.log(`  Modelos:`);
+      prov.models.forEach(m => {
+        const rec = m.recommended ? ` ${colors.yellow}★${colors.reset}` : '';
+        const cost = m.cost === 'free' ? ` ${colors.green}[FREE]${colors.reset}` : (m.cost === 'paid' ? ` ${colors.dim}[pago]${colors.reset}` : '');
+        console.log(`    ${colors.dim}•${colors.reset} ${m.label}${rec}${cost}`);
+      });
+    }
+    console.log('');
+  });
+
+  console.log(`${colors.dim}★ = modelo recomendado | ● = API configurada no .env${colors.reset}`);
+  console.log(`\n${colors.bright}${colors.magenta}=========================================${colors.reset}\n`);
+}
+
+async function cmdPipeline(args) {
+  const subCommand = args[0]?.toLowerCase();
+
+  // ── workspace pipeline sessions ───────────────────────────────────────
+  if (subCommand === 'sessions') {
+    const sessions = listSessions();
+    console.log(`\n${colors.bright}${colors.magenta}=========================================`);
+    console.log(`         SESSÕES DO PIPELINE`);
+    console.log(`=========================================${colors.reset}\n`);
+    if (sessions.length === 0) {
+      console.log(`  ${colors.dim}Nenhuma sessão encontrada. Execute: workspace pipeline run "<tarefa>"${colors.reset}\n`);
+      return;
+    }
+    sessions.slice(0, 20).forEach((s, i) => {
+      const statusColor = s.status === 'completed' ? colors.green :
+                          s.status === 'error'     ? colors.red   : colors.yellow;
+      console.log(`${colors.bright}${i + 1}. ${colors.dim}[${s.id}]${colors.reset}`);
+      console.log(`   ${colors.dim}Tarefa:${colors.reset}  ${s.task}`);
+      console.log(`   ${colors.dim}Status:${colors.reset}  ${statusColor}${s.status}${colors.reset}`);
+      console.log(`   ${colors.dim}Início:${colors.reset}  ${s.started_at}`);
+      console.log(`   ${colors.dim}Etapas:${colors.reset}  ${s.steps}\n`);
+    });
+    console.log(`${colors.bright}${colors.magenta}=========================================${colors.reset}\n`);
+    return;
+  }
+
+  // ── workspace pipeline session <id> ────────────────────────────────
+  if (subCommand === 'session') {
+    const id = args[1];
+    if (!id) {
+      console.log(`${colors.red}Erro: Informe o ID da sessão.${colors.reset}`);
+      console.log(`Uso: workspace pipeline session <id>\n`);
+      return;
+    }
+    const session = getSession(id);
+    if (!session) {
+      console.log(`${colors.red}Sessão "${id}" não encontrada.${colors.reset}\n`);
+      return;
+    }
+    console.log(`\n${colors.bright}${colors.magenta}=========================================`);
+    console.log(`         DETALHE DA SESSÃO`);
+    console.log(`=========================================${colors.reset}\n`);
+    console.log(`${colors.bright}ID:${colors.reset}       ${session.id}`);
+    console.log(`${colors.bright}Tarefa:${colors.reset}   ${session.task}`);
+    console.log(`${colors.bright}Provider:${colors.reset} ${session.provider} / ${session.model}`);
+    console.log(`${colors.bright}Status:${colors.reset}   ${session.status}`);
+    console.log(`${colors.bright}Início:${colors.reset}   ${session.started_at}`);
+    console.log(`${colors.bright}Fim:${colors.reset}      ${session.finished_at || 'em andamento'}\n`);
+    console.log(`${colors.bright}Etapas:${colors.reset}`);
+    session.steps?.forEach(step => {
+      const icon = step.status === 'ok' ? `${colors.green}✔` :
+                   step.status === 'skipped' ? `${colors.yellow}⏭` : `${colors.red}✘`;
+      console.log(`  ${icon}${colors.reset} ${colors.bright}${step.label}${colors.reset} ${colors.dim}(${step.elapsed})${colors.reset}`);
+      if (step.status === 'error') {
+        console.log(`    ${colors.red}Erro: ${step.error}${colors.reset}`);
+      }
+    });
+    if (session.summary) {
+      console.log(`\n${colors.bright}Resumo:${colors.reset} ${session.summary}`);
+    }
+    console.log(`\n${colors.dim}Para ver o output de um agente, abra o arquivo JSON da sessão.${colors.reset}`);
+    console.log(`${colors.bright}${colors.magenta}=========================================${colors.reset}\n`);
+    return;
+  }
+
+  // ── workspace pipeline run "<tarefa>" [...flags] ──────────────────────
+  if (subCommand === 'run') {
+    const taskParts = [];
+    let provider = null;
+    let model = null;
+    let preset = null;
+    let skipDeploy = false;
+    let verbose = false;
+
+    const rawArgs = args.slice(1);
+    for (let i = 0; i < rawArgs.length; i++) {
+      const a = rawArgs[i];
+      if (a === '--provider' || a === '-p')  { provider = rawArgs[++i]; }
+      else if (a === '--model' || a === '-m') { model    = rawArgs[++i]; }
+      else if (a === '--preset')              { preset   = rawArgs[++i]; }
+      else if (a === '--skip-deploy')         { skipDeploy = true; }
+      else if (a === '--verbose' || a === '-v') { verbose = true; }
+      else { taskParts.push(a); }
+    }
+
+    const task = taskParts.join(' ').replace(/^"|"$/g, '').trim();
+    if (!task) {
+      console.log(`\n${colors.red}Erro: Informe a tarefa para o pipeline.${colors.reset}`);
+      console.log(`Uso: workspace pipeline run "<descrição da tarefa>" [--provider <p>] [--model <m>] [--preset fast|quality|full] [--skip-deploy] [--verbose]\n`);
+      return;
+    }
+
+    // Aplica preset se fornecido
+    if (preset) {
+      const configPath = path.join(WORKSPACE_ROOT, 'multiagent', 'pipeline.json');
+      try {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const p = config.presets?.[preset];
+        if (p) {
+          provider   = provider   || p.provider;
+          model      = model      || p.model;
+          skipDeploy = skipDeploy || p.skipDeploy || false;
+          console.log(`\n${colors.cyan}Preset "${preset}" aplicado:${colors.reset} ${p.description}`);
+        } else {
+          console.log(`${colors.yellow}Preset "${preset}" não encontrado. Presets disponíveis: fast, quality, full${colors.reset}`);
+        }
+      } catch (e) { /* ignora */ }
+    }
+
+    await runPipeline({ task, provider: provider || 'mimo', model, skipDeploy, verbose });
+    return;
+  }
+
+  // Fallback: help
+  console.log(`\n${colors.bright}${colors.magenta}workspace pipeline${colors.reset} — Pipeline Multiagente Autônomo\n`);
+  console.log(`${colors.bright}Sub-comandos:${colors.reset}`);
+  console.log(`  ${colors.green}run${colors.reset} "<tarefa>"   Executa o pipeline completo`);
+  console.log(`    Flags: --provider <p>  --model <m>  --preset fast|quality|full`);
+  console.log(`           --skip-deploy   --verbose`);
+  console.log(`  ${colors.cyan}sessions${colors.reset}         Lista sessões anteriores`);
+  console.log(`  ${colors.cyan}session${colors.reset} <id>    Detalhes de uma sessão\n`);
+}
+
 function showHelp() {
   console.log(`
 ${colors.bright}AI Workspace CLI${colors.reset} - Gerencie seu ecossistema modular de IA
@@ -750,13 +960,15 @@ ${colors.bright}Comandos Disponíveis:${colors.reset}
   ${colors.blue}docs${colors.reset}       Gerencia os documentos da pasta docs/ (list, add)
   ${colors.magenta}rag${colors.reset}        Interface RAG de pesquisa contextual (index, query)
   ${colors.cyan}mcp${colors.reset}        Gerencia e inicia o servidor MCP do workspace (start)
+  ${colors.magenta}models${colors.reset}     Lista provedores/modelos de IA (available, test, test <provedor>)
+  ${colors.bright}${colors.magenta}pipeline${colors.reset}   🤖 Executa pipeline multiagente (run, sessions, session <id>)
 
 ${colors.bright}Opções:${colors.reset}
   -h, --help Exibe esta mensagem de ajuda
   `);
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const command = args[0]?.toLowerCase();
   
@@ -805,6 +1017,12 @@ function main() {
     case 'mcp':
       cmdMcp(args.slice(1));
       break;
+    case 'models':
+      await cmdModels(args.slice(1));
+      break;
+    case 'pipeline':
+      await cmdPipeline(args.slice(1));
+      break;
     default:
       console.log(`${colors.red}Erro: Comando "${command}" não reconhecido.${colors.reset}`);
       showHelp();
@@ -812,4 +1030,7 @@ function main() {
   }
 }
 
-main();
+main().catch(err => {
+  console.error(`${colors.red}Erro fatal: ${err.message}${colors.reset}`);
+  process.exit(1);
+});
