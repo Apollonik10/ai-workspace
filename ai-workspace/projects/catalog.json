@@ -1,0 +1,19 @@
+{
+  "projects": [
+    {
+      "id": "ai-workspace",
+      "name": "AI Workspace",
+      "description": "Ambiente de desenvolvimento pessoal focado em IA e automação",
+      "status": "active",
+      "priority": "high",
+      "type": "infrastructure",
+      "repository": "https://github.com/Apollonik10/ai-workspace",
+      "technologies": ["markdown", "json"],
+      "dependencies": [],
+      "tags": ["ia", "automacao", "agentes"],
+      "path": "/data/data/com.termux/files/home/projects/ai-workspace",
+      "created_at": "2026-06-17",
+      "updated_at": "2026-06-21"
+    }
+  ]
+}

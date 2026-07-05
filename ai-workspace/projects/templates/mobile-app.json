@@ -1,0 +1,11 @@
+{
+  "type": "mobile",
+  "technologies": ["html", "css", "javascript"],
+  "structure": {
+    "src": ["components", "pages", "services", "utils"],
+    "public": ["assets", "icons"]
+  },
+  "default_files": ["index.html", "manifest.json", "styles.css", "app.js"],
+  "deploy": "vercel",
+  "pwa": true
+}

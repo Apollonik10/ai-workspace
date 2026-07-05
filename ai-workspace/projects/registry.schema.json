@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project Registry",
+  "description": "Schema padrão para registro de projetos no AI Workspace",
+  "type": "object",
+  "required": ["id", "name", "status", "technologies", "path"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Identificador único do projeto (kebab-case)",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Nome legível do projeto"
+    },
+    "description": {
+      "type": "string",
+      "description": "Breve descrição do projeto"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planning", "development", "testing", "deployed", "archived", "active"],
+      "description": "Status atual do projeto"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Prioridade do projeto"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["frontend", "backend", "fullstack", "mobile", "infrastructure", "library"],
+      "description": "Tipo do projeto"
+    },
+    "repository": {
+      "type": "string",
+      "description": "URL do repositório"
+    },
+    "technologies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tecnologias utilizadas"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "IDs de projetos dependentes"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags para categorização"
+    },
+    "path": {
+      "type": "string",
+      "description": "Caminho absoluto do projeto no workspace"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Data de criação"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Data da última atualização"
+    }
+  }
+}

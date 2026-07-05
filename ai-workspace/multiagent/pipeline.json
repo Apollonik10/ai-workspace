@@ -1,0 +1,82 @@
+{
+  "version": "1.0.0",
+  "description": "Configuração do pipeline multiagente autônomo",
+  "updated_at": "2026-06-21",
+  "pipeline": {
+    "default_provider": "mimo",
+    "default_model": null,
+    "auto_skip_fix_if_approved": true,
+    "max_context_chars": 12000,
+    "step_timeout_ms": 120000
+  },
+  "agents": {
+    "planner": {
+      "label": "Planner Agent",
+      "provider": "mimo",
+      "model": null,
+      "retries": 2,
+      "description": "Analisa requisitos e gera plano de execução estruturado"
+    },
+    "frontend": {
+      "label": "Frontend Agent",
+      "provider": "mimo",
+      "model": null,
+      "retries": 2,
+      "description": "Gera código HTML/CSS/JS com base no plano"
+    },
+    "backend": {
+      "label": "Backend Agent",
+      "provider": "mimo",
+      "model": null,
+      "retries": 2,
+      "description": "Gera APIs, services e models"
+    },
+    "reviewer": {
+      "label": "Reviewer Agent",
+      "provider": "mimo",
+      "model": null,
+      "retries": 2,
+      "description": "Revisa código e emite score de qualidade"
+    },
+    "fix": {
+      "label": "Fix Agent",
+      "provider": "mimo",
+      "model": null,
+      "retries": 2,
+      "description": "Corrige issues críticos apontados pelo Reviewer"
+    },
+    "deploy": {
+      "label": "Deploy Agent",
+      "provider": "mimo",
+      "model": null,
+      "retries": 2,
+      "description": "Gera configs e plano de deploy"
+    }
+  },
+  "presets": {
+    "fast": {
+      "description": "Pipeline rápido — usa modelos menores, sem deploy",
+      "provider": "openrouter",
+      "model": "meta-llama/llama-3.1-8b-instruct:free",
+      "skipDeploy": true
+    },
+    "quality": {
+      "description": "Pipeline de qualidade — melhor modelo disponível",
+      "provider": "gemini",
+      "model": "gemini-2.0-flash",
+      "skipDeploy": false
+    },
+    "full": {
+      "description": "Pipeline completo com Grok para raciocínio avançado",
+      "provider": "grok",
+      "model": "grok-beta",
+      "skipDeploy": false
+    },
+    "local": {
+      "description": "Pipeline 100% offline via Ollama local (celular) — sem custo, sem internet, mas lento (hardware mobile). Recomendado só para tarefas simples ou testes do fluxo, não para o pipeline completo de 6 agentes.",
+      "provider": "local",
+      "model": "auto",
+      "skipDeploy": true
+    }
+  }
+}

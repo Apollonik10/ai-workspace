@@ -1,0 +1,30 @@
+{
+  "name": "ai-workspace",
+  "version": "1.0.0",
+  "description": "Ambiente de desenvolvimento pessoal focado em IA e automação",
+  "updated_at": "2026-06-21",
+  "models": {
+    "default": "mimo",
+    "available": ["mimo", "local", "gemini", "openrouter", "openai", "deepseek", "grok", "nvidia-nim"]
+  },
+  "agents": {
+    "planner": "agents/planner-agent",
+    "frontend": "agents/frontend-agent",
+    "backend": "agents/backend-agent",
+    "reviewer": "agents/reviewer-agent",
+    "fix": "agents/fix-agent",
+    "deploy": "agents/deploy-agent"
+  },
+  "loops": {
+    "planning": "loops/planning-loop",
+    "review": "loops/review-loop",
+    "fix": "loops/fix-loop",
+    "git": "loops/git-loop",
+    "deploy": "loops/deploy-loop"
+  },
+  "multiagent": {
+    "orchestrator": "multiagent/orchestrator.js",
+    "config": "multiagent/pipeline.json",
+    "sessions": "multiagent/sessions"
+  }
+}
