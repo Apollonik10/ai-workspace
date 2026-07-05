@@ -5,7 +5,7 @@
   "updated_at": "2026-06-21",
   "models": {
     "default": "mimo",
-    "available": ["mimo", "gemini", "openrouter", "openai", "deepseek", "grok", "nvidia-nim"]
+    "available": ["mimo", "local", "gemini", "openrouter", "openai", "deepseek", "grok", "nvidia-nim"]
   },
   "agents": {
     "planner": "agents/planner-agent",

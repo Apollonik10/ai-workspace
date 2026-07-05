@@ -71,6 +71,12 @@
       "provider": "grok",
       "model": "grok-beta",
       "skipDeploy": false
+    },
+    "local": {
+      "description": "Pipeline 100% offline via Ollama local (celular) — sem custo, sem internet, mas lento (hardware mobile). Recomendado só para tarefas simples ou testes do fluxo, não para o pipeline completo de 6 agentes.",
+      "provider": "local",
+      "model": "auto",
+      "skipDeploy": true
     }
   }
 }

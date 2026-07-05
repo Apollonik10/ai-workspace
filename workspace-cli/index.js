@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildIndex, search } from '../rag/rag.js';
-import { listModels, testProvider, detectAvailableProviders } from '../models/client.js';
+import { listModels, testProvider, detectAvailableProviders, generateText, checkLocalOllama, pickLocalModel } from '../models/client.js';
 import { runPipeline, listSessions, getSession } from '../multiagent/orchestrator.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -815,6 +815,86 @@ async function cmdModels(args) {
   console.log(`\n${colors.bright}${colors.magenta}=========================================${colors.reset}\n`);
 }
 
+async function cmdLocal(args) {
+  const subCommand = args[0]?.toLowerCase();
+
+  // ── workspace local status ──────────────────────────────────────────────
+  if (subCommand === 'status' || !subCommand) {
+    console.log(`\n${colors.bright}${colors.cyan}=========================================`);
+    console.log(`        OLLAMA LOCAL — STATUS`);
+    console.log(`=========================================${colors.reset}\n`);
+    process.stdout.write(`  Verificando conexão em http://127.0.0.1:11434... `);
+    const status = await checkLocalOllama();
+    if (!status.ok) {
+      console.log(`${colors.red}✘ OFFLINE${colors.reset}`);
+      console.log(`\n  ${colors.yellow}Rode "ollama serve" no Termux e tente de novo.${colors.reset}`);
+      if (status.error) console.log(`  ${colors.dim}${status.error}${colors.reset}`);
+    } else {
+      console.log(`${colors.green}✔ ONLINE${colors.reset}\n`);
+      console.log(`  ${colors.bright}Modelos instalados:${colors.reset}`);
+      if (status.models.length === 0) {
+        console.log(`    ${colors.yellow}Nenhum modelo encontrado. Rode: ollama pull qwen2.5-coder:1.5b-instruct-q4_K_M${colors.reset}`);
+      } else {
+        status.models.forEach(m => console.log(`    ${colors.dim}•${colors.reset} ${m}`));
+      }
+    }
+    console.log(`\n${colors.dim}Uso: workspace local ask "<mensagem>" | workspace local router "<mensagem>"${colors.reset}`);
+    console.log(`${colors.bright}${colors.cyan}=========================================${colors.reset}\n`);
+    return;
+  }
+
+  // ── workspace local router "<mensagem>" (mostra qual modelo seria usado) ──
+  if (subCommand === 'router') {
+    const prompt = args.slice(1).join(' ').replace(/^"|"$/g, '').trim();
+    if (!prompt) {
+      console.log(`${colors.red}Uso: workspace local router "<mensagem>"${colors.reset}\n`);
+      return;
+    }
+    const chosen = pickLocalModel(prompt);
+    const isCoder = chosen.includes('coder');
+    console.log(`\n${colors.bright}Modelo escolhido:${colors.reset} ${isCoder ? colors.yellow : colors.green}${chosen}${colors.reset}`);
+    console.log(`${colors.dim}(${isCoder ? 'detectado termo/tamanho de tarefa de código' : 'tratado como triagem/pergunta simples'})${colors.reset}\n`);
+    return;
+  }
+
+  // ── workspace local ask "<mensagem>" [--model <nome>] ─────────────────────
+  if (subCommand === 'ask') {
+    let model = null;
+    const rawArgs = args.slice(1);
+    const parts = [];
+    for (let i = 0; i < rawArgs.length; i++) {
+      if (rawArgs[i] === '--model' || rawArgs[i] === '-m') { model = rawArgs[++i]; }
+      else parts.push(rawArgs[i]);
+    }
+    const prompt = parts.join(' ').replace(/^"|"$/g, '').trim();
+    if (!prompt) {
+      console.log(`${colors.red}Uso: workspace local ask "<mensagem>" [--model <nome>]${colors.reset}\n`);
+      return;
+    }
+
+    const chosen = model || pickLocalModel(prompt);
+    console.log(`\n${colors.dim}[local]${colors.reset} usando ${colors.bright}${chosen}${colors.reset}${colors.dim}...${colors.reset}\n`);
+
+    const start = Date.now();
+    try {
+      const output = await generateText('local', prompt, { model: model || 'auto' });
+      const elapsedS = ((Date.now() - start) / 1000).toFixed(1);
+      console.log(output);
+      console.log(`\n${colors.dim}(${elapsedS}s)${colors.reset}\n`);
+    } catch (err) {
+      console.log(`${colors.red}Erro: ${err.message}${colors.reset}\n`);
+    }
+    return;
+  }
+
+  // Fallback: help
+  console.log(`\n${colors.bright}${colors.cyan}workspace local${colors.reset} — Modelos locais via Ollama (offline)\n`);
+  console.log(`${colors.bright}Sub-comandos:${colors.reset}`);
+  console.log(`  ${colors.green}status${colors.reset}              Verifica se o Ollama está de pé e lista modelos instalados`);
+  console.log(`  ${colors.cyan}ask${colors.reset} "<mensagem>"      Envia uma mensagem (roteamento automático entre os 2 modelos)`);
+  console.log(`  ${colors.yellow}router${colors.reset} "<mensagem>"   Mostra qual modelo seria escolhido, sem executar\n`);
+}
+
 async function cmdPipeline(args) {
   const subCommand = args[0]?.toLowerCase();
 
@@ -961,6 +1041,7 @@ ${colors.bright}Comandos Disponíveis:${colors.reset}
   ${colors.magenta}rag${colors.reset}        Interface RAG de pesquisa contextual (index, query)
   ${colors.cyan}mcp${colors.reset}        Gerencia e inicia o servidor MCP do workspace (start)
   ${colors.magenta}models${colors.reset}     Lista provedores/modelos de IA (available, test, test <provedor>)
+  ${colors.cyan}local${colors.reset}      🔌 Modelos locais via Ollama (status, ask "<msg>", router "<msg>")
   ${colors.bright}${colors.magenta}pipeline${colors.reset}   🤖 Executa pipeline multiagente (run, sessions, session <id>)
 
 ${colors.bright}Opções:${colors.reset}
@@ -1019,6 +1100,9 @@ async function main() {
       break;
     case 'models':
       await cmdModels(args.slice(1));
+      break;
+    case 'local':
+      await cmdLocal(args.slice(1));
       break;
     case 'pipeline':
       await cmdPipeline(args.slice(1));

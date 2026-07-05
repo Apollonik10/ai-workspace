@@ -70,6 +70,9 @@
 - [x] Grok (xAI — grok-beta)
 - [x] providers.json (catálogo completo de modelos)
 - [x] Comando CLI: workspace models
+- [x] Local (Ollama/Termux) — roteamento automático entre modelo de triagem (0.5B) e coder (1.5B)
+- [x] Mimo com fallback real para modelo local quando nenhuma API na nuvem está configurada
+- [x] Comando CLI: workspace local (status, ask, router)
 
 ## Fase 10 — Multiagentes ✅
 - [x] Pipeline autônomo Planner → Frontend → Backend → Review → Fix → Deploy

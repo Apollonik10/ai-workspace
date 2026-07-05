@@ -10,6 +10,8 @@
  *  - deepseek   → DeepSeek API
  *  - grok       → Grok xAI API
  *  - nvidia-nim → NVIDIA NIM API
+ *  - local      → Ollama local (Termux) — roteamento automático entre
+ *                 um modelo de triagem (rápido) e um modelo coder
  */
 
 import fs from 'fs';
@@ -147,6 +149,78 @@ async function callGrok(prompt, options = {}) {
   return data.choices?.[0]?.message?.content || '';
 }
 
+// ─── Ollama Local (Termux) ─────────────────────────────────────────────────────
+
+const OLLAMA_BASE_URL   = process.env.ollama_base_url   || 'http://127.0.0.1:11434';
+const OLLAMA_ROUTER_MODEL = process.env.ollama_router_model || 'qwen2.5:0.5b-instruct-q4_K_M';
+const OLLAMA_CODER_MODEL  = process.env.ollama_coder_model  || 'qwen2.5-coder:1.5b-instruct-q4_K_M';
+
+// Palavras-chave que indicam tarefa de geração/edição de código real.
+// Se nenhuma bater e o prompt for curto, usa o modelo de triagem (mais rápido).
+const CODE_KEYWORDS = [
+  'função', 'function', 'componente', 'component', 'bug', 'código', 'code',
+  'refatorar', 'refactor', 'implementar', 'implement', 'classe', 'class',
+  'api', 'endpoint', 'css', 'html', 'javascript', 'typescript', 'json',
+  'sql', 'query', 'script', 'debug', 'erro', 'error', 'arquivo', 'file'
+];
+
+/**
+ * Decide qual modelo local usar com base no conteúdo do prompt.
+ * Curto e sem termos de código → modelo de triagem (0.5B, mais rápido).
+ * Longo ou com termos de código → modelo coder (1.5B, mais capaz).
+ * @param {string} prompt
+ * @returns {string} nome do modelo Ollama a usar
+ */
+export function pickLocalModel(prompt = '') {
+  const text = String(prompt).toLowerCase();
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  const hasCodeKeyword = CODE_KEYWORDS.some(k => text.includes(k));
+  return (hasCodeKeyword || wordCount > 30) ? OLLAMA_CODER_MODEL : OLLAMA_ROUTER_MODEL;
+}
+
+async function callOllamaLocal(prompt, options = {}) {
+  const model = (options.model && options.model !== 'auto') ? options.model : pickLocalModel(prompt);
+  const messages = buildMessages(prompt, options.systemInstruction);
+
+  let res;
+  try {
+    res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        options: { num_ctx: options.numCtx || 2048 }
+      })
+    });
+  } catch (e) {
+    throw new Error(`Não foi possível conectar ao Ollama em ${OLLAMA_BASE_URL}. Rode "ollama serve" no Termux. (${e.message})`);
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Ollama local HTTP ${res.status}: ${errText}`);
+  }
+  const data = await res.json();
+  return data.message?.content || '';
+}
+
+/**
+ * Verifica se o Ollama local está de pé e quais modelos estão instalados.
+ * @returns {Promise<{ok: boolean, models: string[], error?: string}>}
+ */
+export async function checkLocalOllama() {
+  try {
+    const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`, { signal: AbortSignal.timeout(2500) });
+    if (!res.ok) return { ok: false, models: [] };
+    const data = await res.json();
+    return { ok: true, models: (data.models || []).map(m => m.name) };
+  } catch (e) {
+    return { ok: false, models: [], error: e.message };
+  }
+}
+
 async function callNvidiaNim(prompt, options = {}) {
   const apiKey = process.env.nvidia_api_key || process.env.gpt_api;
   if (!apiKey) throw new Error('nvidia_api_key não configurada no .env');
@@ -181,8 +255,9 @@ async function callMimo(prompt, options = {}) {
       });
     }
   }
-  // Fallback local se nenhuma API estiver configurada
-  return `[Mimo Fallback Local] Nenhuma API configurada. Prompt recebido: "${prompt}"`;
+  // Fallback real: nenhuma API na nuvem configurada → usa Ollama local (Termux)
+  console.error('[Mimo] Nenhuma API na nuvem configurada — usando modelo local (Ollama) como fallback.');
+  return callOllamaLocal(prompt, options);
 }
 
 // ─── Funções públicas ──────────────────────────────────────────────────────────
@@ -199,6 +274,8 @@ export async function generateText(provider, prompt, options = {}) {
 
   switch (prov) {
     case 'mimo':        return callMimo(prompt, options);
+    case 'local':
+    case 'ollama':      return callOllamaLocal(prompt, options);
     case 'gemini':      return callGemini(prompt, options);
     case 'openrouter':  return callOpenRouter(prompt, options);
     case 'openai':      return callOpenAI(prompt, options);
@@ -207,7 +284,7 @@ export async function generateText(provider, prompt, options = {}) {
     case 'nvidia':
     case 'nvidia-nim':  return callNvidiaNim(prompt, options);
     default:
-      throw new Error(`Provedor desconhecido: "${provider}". Use: mimo, gemini, openrouter, openai, deepseek, grok, nvidia-nim`);
+      throw new Error(`Provedor desconhecido: "${provider}". Use: mimo, local, gemini, openrouter, openai, deepseek, grok, nvidia-nim`);
   }
 }
 

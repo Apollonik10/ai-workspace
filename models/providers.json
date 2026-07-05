@@ -2,6 +2,19 @@
   "version": "1.0.0",
   "updated_at": "2026-06-21",
   "providers": {
+    "local": {
+      "name": "Ollama Local",
+      "description": "Modelos rodando 100% localmente via Ollama no próprio celular (Termux) — offline, sem custo, sem limite de uso. Roteamento automático entre um modelo rápido de triagem e um modelo coder, calibrado para o hardware mobile.",
+      "type": "local",
+      "env_key": null,
+      "base_url": "http://127.0.0.1:11434",
+      "default_model": "auto",
+      "models": [
+        { "id": "auto", "label": "Auto (roteamento inteligente entre os dois abaixo)", "recommended": true, "cost": "free" },
+        { "id": "qwen2.5:0.5b-instruct-q4_K_M", "label": "Qwen2.5 0.5B — roteador/triagem rápida (~15 tok/s)", "cost": "free" },
+        { "id": "qwen2.5-coder:1.5b-instruct-q4_K_M", "label": "Qwen2.5-Coder 1.5B — geração de código (~5 tok/s)", "cost": "free" }
+      ]
+    },
     "mimo": {
       "name": "Mimo",
       "description": "Roteador inteligente — seleciona o melhor provedor disponível automaticamente",
