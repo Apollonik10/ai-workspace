@@ -272,14 +272,18 @@ async function callMimo(prompt, options = {}) {
   for (const candidate of MIMO_PRIORITY) {
     if (process.env[candidate.key]) {
       console.error(`[Mimo] Roteando para: ${candidate.provider} (${candidate.model})`);
-      return generateText(candidate.provider, prompt, {
-        ...options,
-        model: options.model || candidate.model
-      });
+      try {
+        return await generateText(candidate.provider, prompt, {
+          ...options,
+          model: options.model || candidate.model
+        });
+      } catch (err) {
+        console.error(`[Mimo] Falha ao chamar ${candidate.provider}: ${err.message}. Tentando próximo candidato...`);
+      }
     }
   }
-  // Fallback real: nenhuma API na nuvem configurada → usa Ollama local (Termux)
-  console.error('[Mimo] Nenhuma API na nuvem configurada — usando modelo local (Ollama) como fallback.');
+  // Fallback real: nenhuma API na nuvem configurada ou todas falharam → usa Ollama local (Termux)
+  console.error('[Mimo] Nenhuma API na nuvem respondeu — usando modelo local (Ollama) como fallback.');
   return callOllamaLocal(prompt, options);
 }
 

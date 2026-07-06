@@ -459,6 +459,24 @@ function cmdAgent(args) {
     cmdAgents();
     return;
   }
+
+  if (subCommand === 'run') {
+    const task = args.slice(1).join(" ");
+    if (!task) {
+      console.log(`\n${colors.red}Erro: Comando 'run' requer a descrição da tarefa.${colors.reset}`);
+      console.log(`Uso: workspace agent run "<descrição da tarefa>"\n`);
+      return;
+    }
+    // Importa dinamicamente e executa
+    import('../core/agent-loop.js').then(async (m) => {
+      try {
+        await m.runAgent(task);
+      } catch (err) {
+        console.error(`${colors.red}Erro ao executar o agente: ${err.message}${colors.reset}`);
+      }
+    });
+    return;
+  }
   
   const configPath = path.join(WORKSPACE_ROOT, 'configs', 'workspace.json');
   const config = readJsonFile(configPath);
@@ -1048,7 +1066,7 @@ ${colors.bright}Comandos Disponíveis:${colors.reset}
   
   ${colors.cyan}init${colors.reset}       Inicializa a estrutura do workspace e arquivos padrão
   ${colors.green}project${colors.reset}    Gerencia o catálogo de projetos (list, add, remove)
-  ${colors.cyan}agent${colors.reset}      Gerencia os agentes do workspace (list, add, remove)
+  ${colors.cyan}agent${colors.reset}      Gerencia e executa agentes do workspace (list, add, remove, run)
   ${colors.yellow}loop${colors.reset}       Gerencia os loops do workspace (list, add, remove)
   ${colors.blue}docs${colors.reset}       Gerencia os documentos da pasta docs/ (list, add)
   ${colors.magenta}rag${colors.reset}        Interface RAG de pesquisa contextual (index, query)
