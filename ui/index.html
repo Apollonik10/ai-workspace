@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="AI Workspace Chat — assistente de código inteligente com modelos locais e na nuvem.">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="color-scheme" content="dark">
+  <title>AI Workspace Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ========== Header ========== -->
+  <header class="header" role="banner">
+    <div class="header-inner">
+      <h1 class="header-title">AI Workspace Chat</h1>
+      <button id="model-selector-btn" class="model-selector-btn" type="button" aria-haspopup="dialog" aria-label="Selecionar modelo">
+        <span class="model-selector-dot"></span>
+        <span id="current-model-label" class="model-selector-label">Auto</span>
+        <svg class="model-selector-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========== Main Chat Area ========== -->
+  <main class="chat-container" id="chat-messages" role="log" aria-live="polite" aria-label="Mensagens do chat">
+
+    <!-- Empty State -->
+    <section class="empty-state" id="empty-state" aria-label="Início">
+      <div class="empty-state-icon" aria-hidden="true">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="4" y="8" width="40" height="32" rx="8" stroke="url(#grad-icon)" stroke-width="2.5"/>
+          <path d="M16 22h16M16 28h10" stroke="url(#grad-icon)" stroke-width="2" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="grad-icon" x1="4" y1="8" x2="44" y2="40" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#7c3aed"/>
+              <stop offset="1" stop-color="#2563eb"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h2 class="empty-state-title">Como posso ajudar?</h2>
+      <p class="empty-state-subtitle">Escolha uma sugestão ou escreva sua pergunta</p>
+
+      <div class="suggestion-chips" role="list" aria-label="Sugestões">
+        <button class="chip" type="button" role="listitem" data-prompt="Explicar código">
+          <svg class="chip-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 4l-3 4 3 4M11 4l3 4-3 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Explicar código
+        </button>
+        <button class="chip" type="button" role="listitem" data-prompt="Gerar função">
+          <svg class="chip-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Gerar função
+        </button>
+        <button class="chip" type="button" role="listitem" data-prompt="Revisar trecho">
+          <svg class="chip-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 8l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Revisar trecho
+        </button>
+        <button class="chip" type="button" role="listitem" data-prompt="Criar componente">
+          <svg class="chip-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+          Criar componente
+        </button>
+      </div>
+    </section>
+
+    <!-- Messages are injected here by app.js -->
+
+  </main>
+
+  <!-- ========== Typing Indicator ========== -->
+  <div class="typing-indicator" id="typing-indicator" aria-label="Modelo está digitando" role="status" hidden>
+    <div class="typing-indicator-inner">
+      <span class="typing-dot"></span>
+      <span class="typing-dot"></span>
+      <span class="typing-dot"></span>
+    </div>
+  </div>
+
+  <!-- ========== Bottom Input Bar ========== -->
+  <footer class="input-bar" role="contentinfo">
+    <div class="input-bar-inner">
+      <!-- Generation controls row -->
+      <div class="generation-controls" id="generation-controls">
+        <span class="timer" id="generation-timer" aria-label="Tempo decorrido">00:00</span>
+        <button class="stop-btn" id="stop-btn" type="button" aria-label="Parar geração">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/>
+          </svg>
+          Parar
+        </button>
+      </div>
+
+      <!-- Input row -->
+      <div class="input-row">
+        <label for="message-input" class="sr-only">Mensagem</label>
+        <textarea
+          id="message-input"
+          class="message-input"
+          placeholder="Escreva uma mensagem…"
+          rows="1"
+          aria-label="Escreva sua mensagem"
+          enterkeyhint="send"
+        ></textarea>
+        <button id="send-btn" class="send-btn" type="button" aria-label="Enviar mensagem" disabled>
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 10l12-6-4 6 4 6L4 10z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========== Model Selector Bottom Sheet ========== -->
+  <div class="bottom-sheet-overlay" id="model-sheet-backdrop" aria-hidden="true"></div>
+  <aside class="bottom-sheet" id="model-sheet" role="dialog" aria-label="Seletor de modelo" aria-modal="true" aria-hidden="true">
+    <div class="bottom-sheet-handle" aria-hidden="true"><span></span></div>
+    <h2 class="bottom-sheet-title">Selecionar modelo</h2>
+    <ul class="model-list" role="listbox" aria-label="Modelos disponíveis">
+      <li>
+        <button class="model-option selected" role="option" aria-selected="true" data-value="auto" type="button">
+          <span class="model-option-dot auto"></span>
+          <div class="model-option-info">
+            <span class="model-option-name">Auto</span>
+            <span class="model-option-desc">recomendado</span>
+          </div>
+          <svg class="model-option-check" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4 9l4 4 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </li>
+      <li>
+        <button class="model-option" role="option" aria-selected="false" data-value="qwen2.5:0.5b-instruct-q4_K_M" type="button">
+          <span class="model-option-dot local"></span>
+          <div class="model-option-info">
+            <span class="model-option-name">Local — rápido</span>
+            <span class="model-option-desc">0.5B · no dispositivo</span>
+          </div>
+          <svg class="model-option-check" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4 9l4 4 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </li>
+      <li>
+        <button class="model-option" role="option" aria-selected="false" data-value="qwen2.5-coder:1.5b-instruct-q4_K_M" type="button">
+          <span class="model-option-dot local"></span>
+          <div class="model-option-info">
+            <span class="model-option-name">Local — coder</span>
+            <span class="model-option-desc">1.5B · otimizado para código</span>
+          </div>
+          <svg class="model-option-check" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4 9l4 4 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </li>
+      <li>
+        <button class="model-option" role="option" aria-selected="false" data-value="mimo" type="button">
+          <span class="model-option-dot cloud"></span>
+          <div class="model-option-info">
+            <span class="model-option-name">Nuvem</span>
+            <span class="model-option-desc">Mimo · mais capaz</span>
+          </div>
+          <svg class="model-option-check" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4 9l4 4 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- ========== Message Template (used by app.js) ========== -->
+  <template id="message-template">
+    <article class="message">
+      <div class="message-tag">
+        <span class="model-dot"></span>
+        <span class="model-label"></span>
+      </div>
+      <div class="message-bubble">
+        <div class="message-content"></div>
+      </div>
+    </article>
+  </template>
+
+  <!-- ========== Code Block Template ========== -->
+  <template id="code-block-template">
+    <div class="code-block">
+      <div class="code-block-header">
+        <span class="code-lang"></span>
+        <button class="code-copy-btn" type="button" aria-label="Copiar código">
+          <svg class="copy-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M9.5 4.5V3a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 3v5A1.5 1.5 0 003 9.5h1.5" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+          <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 7l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <pre><code></code></pre>
+    </div>
+  </template>
+
+  <!-- Screen reader only helper -->
+  <style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

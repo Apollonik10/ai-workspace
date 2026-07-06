@@ -221,6 +221,29 @@ export async function checkLocalOllama() {
   }
 }
 
+/**
+ * Garante que o "ollama serve" está rodando; se não estiver, sobe em background
+ * e aguarda até responder (ou até estourar o timeout).
+ * @param {number} timeoutMs
+ * @returns {Promise<{started: boolean, alreadyRunning: boolean}>}
+ */
+export async function ensureOllamaRunning(timeoutMs = 8000) {
+  const initial = await checkLocalOllama();
+  if (initial.ok) return { started: false, alreadyRunning: true };
+
+  const { spawn } = await import('child_process');
+  const child = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' });
+  child.unref();
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 500));
+    const status = await checkLocalOllama();
+    if (status.ok) return { started: true, alreadyRunning: false };
+  }
+  return { started: false, alreadyRunning: false };
+}
+
 async function callNvidiaNim(prompt, options = {}) {
   const apiKey = process.env.nvidia_api_key || process.env.gpt_api;
   if (!apiKey) throw new Error('nvidia_api_key não configurada no .env');

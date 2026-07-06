@@ -85,6 +85,7 @@
 - [x] Comando CLI: workspace pipeline run/sessions/session
 
 ## Fase 11 — Interface PWA
+- [x] Chat Web local (integração Mimo/Ollama com streaming e controle de geração)
 - [ ] Dashboard
 - [ ] Projetos
 - [ ] Agentes

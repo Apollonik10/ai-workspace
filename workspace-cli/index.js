@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildIndex, search } from '../rag/rag.js';
-import { listModels, testProvider, detectAvailableProviders, generateText, checkLocalOllama, pickLocalModel } from '../models/client.js';
+import { listModels, testProvider, detectAvailableProviders, generateText, checkLocalOllama, pickLocalModel, ensureOllamaRunning } from '../models/client.js';
 import { runPipeline, listSessions, getSession } from '../multiagent/orchestrator.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -824,7 +824,13 @@ async function cmdLocal(args) {
     console.log(`        OLLAMA LOCAL — STATUS`);
     console.log(`=========================================${colors.reset}\n`);
     process.stdout.write(`  Verificando conexão em http://127.0.0.1:11434... `);
-    const status = await checkLocalOllama();
+    let status = await checkLocalOllama();
+    if (!status.ok) {
+      console.log(`${colors.yellow}offline, tentando iniciar...${colors.reset}`);
+      const ensured = await ensureOllamaRunning();
+      status = await checkLocalOllama();
+      if (ensured.started) console.log(`  ${colors.green}Ollama iniciado automaticamente.${colors.reset}`);
+    }
     if (!status.ok) {
       console.log(`${colors.red}✘ OFFLINE${colors.reset}`);
       console.log(`\n  ${colors.yellow}Rode "ollama serve" no Termux e tente de novo.${colors.reset}`);
@@ -873,7 +879,14 @@ async function cmdLocal(args) {
     }
 
     const chosen = model || pickLocalModel(prompt);
-    console.log(`\n${colors.dim}[local]${colors.reset} usando ${colors.bright}${chosen}${colors.reset}${colors.dim}...${colors.reset}\n`);
+    console.log(`\n${colors.dim}[local]${colors.reset} verificando Ollama...`);
+    const ensured = await ensureOllamaRunning();
+    if (ensured.started) console.log(`${colors.yellow}Ollama estava offline — iniciado automaticamente.${colors.reset}`);
+    if (!ensured.started && !ensured.alreadyRunning) {
+      console.log(`${colors.red}Não consegui iniciar o Ollama automaticamente. Rode "ollama serve" manualmente.${colors.reset}\n`);
+      return;
+    }
+    console.log(`${colors.dim}[local]${colors.reset} usando ${colors.bright}${chosen}${colors.reset}${colors.dim}...${colors.reset}\n`);
 
     const start = Date.now();
     try {
