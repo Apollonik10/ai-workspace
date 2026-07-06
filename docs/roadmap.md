@@ -92,3 +92,13 @@
 - [ ] Loops
 - [ ] Logs
 - [ ] Configurações
+
+## Fase 12 — Agente CLI com Function Calling ✅
+- [x] core/tools.js (read_file, write_file, list_dir, run_command, sandboxing por safePath)
+- [x] core/safety.js (confirmação [Y/n] para ações perigosas)
+- [x] core/prompt-builder.js (system prompt + skills carregadas por contexto)
+- [x] core/agent-loop.js (loop ReAct: pensar → agir → observar, MAX_STEPS=15)
+- [x] Integração via `workspace agent run "<tarefa>"` (workspace-cli/index.js)
+- [x] Fix: PROJECT_ROOT resolvido por .git/package.json em vez de cwd (evita falhas quando executado de subpasta)
+- [x] Fix: provider padrão do agente é `local` (Ollama, offline) — nuvem (`mimo`) vira opt-in via AGENT_PROVIDER
+- [x] Testado: sandboxing de path, list_dir/read_file/write_file, loop ReAct simulado (mock de modelo) ponta a ponta

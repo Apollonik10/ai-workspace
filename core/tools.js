@@ -2,7 +2,24 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
-const PROJECT_ROOT = process.cwd();
+// Sobe diretórios a partir de onde o comando foi chamado até achar a raiz
+// REAL do projeto (marcada por .git, que só existe uma vez, na raiz do
+// repo). Isso evita que o agente "perca" a raiz quando é executado de
+// dentro de uma subpasta com seu próprio package.json (ex: workspace-cli/),
+// o que fazia read_file/list_dir falharem sempre.
+function findProjectRoot(startDir) {
+  let dir = startDir;
+  let fallback = null;
+  while (true) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir; // sinal mais confiável, prioridade máxima
+    if (!fallback && fs.existsSync(path.join(dir, 'package.json'))) fallback = dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return fallback || startDir; // chegou na raiz do filesystem
+    dir = parent;
+  }
+}
+
+const PROJECT_ROOT = findProjectRoot(process.cwd());
 
 // Impede o agente de sair da pasta do projeto (segurança básica)
 function safePath(relativePath) {

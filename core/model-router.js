@@ -6,8 +6,13 @@ import { generateText, ensureOllamaRunning } from '../models/client.js';
  * @param {Array<{role: string, content: string}>} history
  * @returns {Promise<string>} Resposta gerada pelo modelo
  */
+// Provedor padrão do agente CLI: 'local' (Ollama, offline, grátis).
+// Setar AGENT_PROVIDER=mimo no .env liga o roteamento por nuvem de novo,
+// caso você queira usar as APIs pagas/gratuitas em algum teste específico.
+const AGENT_PROVIDER = process.env.AGENT_PROVIDER || 'local';
+
 export async function callModel(history) {
-  // Garante que o Ollama local esteja ativo caso seja usado de fallback
+  // Garante que o Ollama local esteja de pé antes de qualquer chamada
   try {
     await ensureOllamaRunning();
   } catch (err) {
@@ -24,7 +29,7 @@ export async function callModel(history) {
   // Se for apenas o primeiro turno de conversa
   if (chatHistory.length === 1) {
     const prompt = chatHistory[0].content;
-    return await generateText('mimo', prompt, { systemInstruction });
+    return await generateText(AGENT_PROVIDER, prompt, { systemInstruction });
   }
 
   // Se houver turnos anteriores, formatamos de forma estruturada para o modelo
@@ -43,5 +48,5 @@ export async function callModel(history) {
     }
   });
 
-  return await generateText('mimo', prompt, { systemInstruction });
+  return await generateText(AGENT_PROVIDER, prompt, { systemInstruction });
 }
