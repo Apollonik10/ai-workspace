@@ -136,15 +136,17 @@ async function callDeepSeek(prompt, options = {}) {
   return data.choices?.[0]?.message?.content || '';
 }
 
-async function callGrok(prompt, options = {}) {
-  const apiKey = process.env.grok_api;
-  if (!apiKey) throw new Error('grok_api (xAI) não configurada no .env');
+// ─── Groq (llama-3.3-70b-versatile, ultra-rápido, gratuito) ──────────────────
+// NOTA: a chave começa com gsk_ — é Groq (groq.com), não xAI Grok
+async function callGroq(prompt, options = {}) {
+  const apiKey = process.env.grok_api || process.env.groq_api;
+  if (!apiKey) throw new Error('grok_api (Groq) não configurada no .env');
 
-  const model = options.model || 'grok-beta';
+  const model = options.model || 'llama-3.3-70b-versatile';
   const data = await postJSON(
-    'https://api.x.ai/v1/chat/completions',
+    'https://api.groq.com/openai/v1/chat/completions',
     { 'Authorization': `Bearer ${apiKey}` },
-    { model, messages: buildMessages(prompt, options.systemInstruction) }
+    { model, messages: buildMessages(prompt, options.systemInstruction), max_tokens: options.maxTokens || 4096 }
   );
   return data.choices?.[0]?.message?.content || '';
 }
@@ -260,10 +262,12 @@ async function callNvidiaNim(prompt, options = {}) {
 // ─── Roteador Mimo ─────────────────────────────────────────────────────────────
 
 const MIMO_PRIORITY = [
+  // Groq: ultra-rápido, gratuito, llama-3.3-70b — PRIMEIRA escolha
+  { key: 'grok_api',         provider: 'groq',       model: 'llama-3.3-70b-versatile' },
+  // OpenRouter: acesso a modelos free (fallback quando Groq está ocupado)
   { key: 'aider_key',        provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
   { key: 'gemini_api',       provider: 'gemini',     model: 'gemini-2.0-flash' },
   { key: 'deepseek_api_key', provider: 'deepseek',   model: 'deepseek-chat' },
-  { key: 'grok_api',         provider: 'grok',       model: 'grok-beta' },
   { key: 'gpt_api',          provider: 'openai',     model: 'gpt-4o-mini' },
   { key: 'nvidia_api_key',   provider: 'nvidia-nim', model: 'meta/llama3-70b-instruct' },
 ];
@@ -278,11 +282,20 @@ async function callMimo(prompt, options = {}) {
           model: options.model || candidate.model
         });
       } catch (err) {
-        console.error(`[Mimo] Falha ao chamar ${candidate.provider}: ${err.message}. Tentando próximo candidato...`);
+        const msg = err.message || '';
+        // Para rate limit, tenta retry uma vez após espera curta antes de passar pro próximo
+        if (msg.includes('429') || msg.includes('rate_limit') || msg.includes('rate limit')) {
+          // Extrai retry-after se disponível
+          const retryMatch = msg.match(/retry_after_seconds[^\d]*(\d+)/i) || msg.match(/retry[^0-9]*(\d+)s/i);
+          const waitSec = retryMatch ? Math.min(parseInt(retryMatch[1]) + 1, 15) : 5;
+          console.error(`[Mimo] Rate limit em ${candidate.provider} — aguardando ${waitSec}s antes de tentar próximo...`);
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+        }
+        console.error(`[Mimo] Falha ao chamar ${candidate.provider}: ${msg.substring(0, 200)}. Tentando próximo candidato...`);
       }
     }
   }
-  // Fallback real: nenhuma API na nuvem configurada ou todas falharam → usa Ollama local (Termux)
+  // Fallback real: nenhuma API na nuvem respondeu — usando modelo local (Ollama) como fallback.
   console.error('[Mimo] Nenhuma API na nuvem respondeu — usando modelo local (Ollama) como fallback.');
   return callOllamaLocal(prompt, options);
 }
@@ -307,11 +320,11 @@ export async function generateText(provider, prompt, options = {}) {
     case 'openrouter':  return callOpenRouter(prompt, options);
     case 'openai':      return callOpenAI(prompt, options);
     case 'deepseek':    return callDeepSeek(prompt, options);
-    case 'grok':        return callGrok(prompt, options);
+    case 'groq':        return callGroq(prompt, options);  // Groq (gsk_ key)
     case 'nvidia':
     case 'nvidia-nim':  return callNvidiaNim(prompt, options);
     default:
-      throw new Error(`Provedor desconhecido: "${provider}". Use: mimo, local, gemini, openrouter, openai, deepseek, grok, nvidia-nim`);
+      throw new Error(`Provedor desconhecido: "${provider}". Use: mimo, local, gemini, openrouter, openai, deepseek, groq, nvidia-nim`);
   }
 }
 
@@ -353,11 +366,11 @@ export async function testProvider(provider) {
  */
 export function detectAvailableProviders() {
   const checks = [
+    { key: 'grok_api',         provider: 'groq'        },  // Groq (gsk_ key)
     { key: 'gemini_api',       provider: 'gemini'      },
     { key: 'aider_key',        provider: 'openrouter'  },
     { key: 'gpt_api',          provider: 'openai'      },
     { key: 'deepseek_api_key', provider: 'deepseek'    },
-    { key: 'grok_api',         provider: 'grok'        },
     { key: 'nvidia_api_key',   provider: 'nvidia-nim'  },
   ];
   const available = checks.filter(c => !!process.env[c.key]).map(c => c.provider);
