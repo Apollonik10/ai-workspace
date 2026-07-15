@@ -120,3 +120,10 @@
 - [x] model-router.js: histórico formatado legível, trunca contexto longo automaticamente
 - [x] Parser JSON robusto: remove fences, comentários e texto fora do objeto JSON
 - [x] DEBUG_AGENT=1 para logs detalhados de erros
+
+## Fase 14 — Agente CLI Avançado, Resiliente e Integrado ✅
+- [x] RAG inteligente no prompt-builder: busca BM25 automática de skills e documentação mais relevantes à tarefa (evita estourar limite de tokens)
+- [x] Loop de Feedback por Testes no System Prompt: obrigatoriedade de rodar scripts de teste/linter (run_command) e auto-correção em caso de falha antes de concluir a tarefa
+- [x] Persistência de Sessões: histórico de pensamentos/ações ReAct do agente CLI salvo em tempo real em `sessions/<sessionId>.json`
+- [x] Retomada de Sessão: comando `workspace agent run --resume <sessionId>` para continuar loops interrompidos por erro ou cancelados
+- [x] Gerenciamento de Sessão na CLI: subcomando `workspace agent sessions` para listar sessões e `workspace agent session <ID>` para detalhar histórico

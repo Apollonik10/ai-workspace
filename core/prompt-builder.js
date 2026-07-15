@@ -2,13 +2,25 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getProjectRoot } from './tools.js';
+import { search } from '../rag/rag.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-// Carrega skills relevantes para a tarefa
+// Carrega skills e docs relevantes para a tarefa usando RAG (BM25)
 function loadRelevantSkills(taskDescription) {
-  // Procura a pasta skills relativa ao ai-workspace (pai de core/)
+  try {
+    const ragResults = search(taskDescription, 4);
+    if (ragResults && ragResults.length > 0) {
+      return ragResults
+        .map(r => `## Ref: ${r.title} (Score: ${r.score.toFixed(2)})\n${r.content}`)
+        .join('\n\n');
+    }
+  } catch (err) {
+    // Silencioso se der erro e cai no fallback
+  }
+
+  // Fallback: busca simples baseada no nome do arquivo
   const workspaceRoot = path.resolve(__dirname, '..');
   const skillsDir = path.join(workspaceRoot, 'skills');
   if (!fs.existsSync(skillsDir)) return '';
@@ -87,7 +99,7 @@ PROJETO ATUAL: ${projectRoot}
 8. done         → Finaliza a tarefa com resumo
    Params: { "summary": "Descrição do que foi feito" }
 
-═══ FLUXO DE TRABALHO GIT (sempre que alterar código) ═══
+═══ FLUXO DE TRABALHO GIT (se alterar código) ═══
 1. Faça as alterações necessárias (write_file / edit_file)
 2. Execute: git add .
 3. Execute: git commit -m "tipo: descrição clara do que mudou"
@@ -95,16 +107,20 @@ PROJETO ATUAL: ${projectRoot}
 
 Tipos de commit: feat, fix, refactor, docs, style, chore, test
 
+═══ FLUXO DE VERIFICAÇÃO E TESTES ═══
+- Antes de usar a ferramenta "done" para finalizar seu trabalho, você DEVE rodar os testes ou linter do projeto (ex: usando run_command com "npm test", "npm run lint", "python -m unittest", etc.) se houver configurações ou scripts de teste definidos no projeto (ex: confira o package.json).
+- Se os testes falharem ou o linter apontar erros, use edit_file ou write_file para corrigir o código, e então execute os testes novamente até que todos passem. Não finalize a tarefa com testes quebrados.
+
 ═══ REGRAS ABSOLUTAS ═══
 - Responda SEMPRE em JSON puro, uma linha, sem markdown, sem explicações fora do JSON.
 - Formato obrigatório: {"thought": "raciocínio interno", "action": "nome_da_ferramenta", "params": {...}}
 - Para finalizar: {"thought": "concluí tudo", "action": "done", "params": {"summary": "..."}}
 - Nunca invente conteúdo de arquivo sem antes ler o existente (use read_file primeiro).
 - Se um caminho não existir, use list_dir para explorar antes de agir.
-- Commits só após confirmar que os arquivos foram escritos corretamente.
+- Commits só após confirmar que os arquivos foram escritos corretamente e os testes passaram.
 - Se der erro em run_command, leia o stderr e corrija antes de tentar de novo.
 
-═══ CONTEXTO DE SKILLS ═══
-${skills || 'Nenhuma skill carregada.'}
+═══ CONTEXTO DE SKILLS / DOCS RELEVANTES ═══
+${skills || 'Nenhuma skill ou doc de contexto carregado.'}
 `;
 }

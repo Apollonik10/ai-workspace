@@ -442,7 +442,6 @@ function cmdProject(args) {
       console.log(`${colors.red}Erro: Projeto com ID "${id}" não encontrado no catálogo.${colors.reset}`);
       return;
     }
-    
     if (writeJsonFile(catalogPath, catalog)) {
       console.log(`\n${colors.green}✔ Projeto com ID "${id}" removido com sucesso!${colors.reset}\n`);
     }
@@ -460,13 +459,14 @@ async function cmdAgent(args) {
     return;
   }
 
-  // ── workspace agent run "<tarefa>" [--auto] [--project /caminho] [--provider gemini] ──
+  // ── workspace agent run "<tarefa>" [--auto] [--project /caminho] [--provider gemini] [--resume <ID>] ──
   if (subCommand === 'run') {
     // Extrai flags e monta a tarefa
     const rawArgs = args.slice(1);
     let autoMode = false;
     let projectPath = null;
     let provider = null;
+    let resumeSessionId = null;
     const taskParts = [];
 
     for (let i = 0; i < rawArgs.length; i++) {
@@ -476,25 +476,28 @@ async function cmdAgent(args) {
         projectPath = rawArgs[++i];
       } else if (rawArgs[i] === '--provider') {
         provider = rawArgs[++i];
+      } else if (rawArgs[i] === '--resume' || rawArgs[i] === '-r') {
+        resumeSessionId = rawArgs[++i];
       } else {
         taskParts.push(rawArgs[i]);
       }
     }
 
     const task = taskParts.join(' ');
-    if (!task) {
-      console.log(`\n${colors.red}Erro: Comando 'run' requer a descrição da tarefa.${colors.reset}`);
+    if (!task && !resumeSessionId) {
+      console.log(`\n${colors.red}Erro: Comando 'run' requer a descrição da tarefa ou flag --resume <sessionId>.${colors.reset}`);
       console.log(`\nUso:`);
       console.log(`  workspace agent run "<tarefa>"                    # confirma cada ação`);
       console.log(`  workspace agent run "<tarefa>" --auto              # aprova tudo automaticamente`);
       console.log(`  workspace agent run "<tarefa>" --project /caminho  # age em outro projeto`);
       console.log(`  workspace agent run "<tarefa>" --provider gemini   # usa modelo específico`);
+      console.log(`  workspace agent run --resume <sessionId>           # retoma sessão interrompida`);
       return;
     }
 
     try {
       const m = await import('../core/agent-loop.js');
-      await m.runAgent(task, { autoMode, projectPath, provider });
+      await m.runAgent(task, { autoMode, projectPath, provider, resumeSessionId });
     } catch (err) {
       console.error(`${colors.red}Erro ao executar o agente: ${err.message}${colors.reset}`);
       if (process.env.DEBUG_AGENT) console.error(err.stack);
@@ -579,32 +582,111 @@ async function cmdAgent(args) {
     askTask();
     return;
   }
-  
+
+  // ── workspace agent sessions ──
+  if (subCommand === 'sessions') {
+    try {
+      const m = await import('../core/agent-loop.js');
+      const sessions = m.listSessions();
+      if (sessions.length === 0) {
+        console.log(`\n${colors.yellow}Nenhuma sessão de agente encontrada.${colors.reset}\n`);
+        return;
+      }
+      console.log(`\n${colors.magenta}${colors.bright}📋 Sessões do Agente Disponíveis:${colors.reset}\n`);
+      sessions.forEach(s => {
+        const dateStr = new Date(s.updated_at).toLocaleString();
+        let statusColor = colors.yellow;
+        if (s.status === 'completed') statusColor = colors.green;
+        if (s.status === 'failed') statusColor = colors.red;
+
+        console.log(`  ${colors.bright}ID:${colors.reset}       ${s.id}`);
+        console.log(`  ${colors.cyan}Tarefa:${colors.reset}   "${s.task.substring(0, 60)}${s.task.length > 60 ? '...' : ''}"`);
+        console.log(`  ${colors.cyan}Status:${colors.reset}   ${statusColor}${s.status}${colors.reset} (Passos: ${s.steps_taken})`);
+        console.log(`  ${colors.cyan}Atualizado:${colors.reset} ${dateStr}`);
+        console.log(`  ${colors.cyan}Projeto:${colors.reset}    ${s.projectPath}`);
+        console.log(`${colors.dim}  ──────────────────────────────────────────${colors.reset}`);
+      });
+      console.log(`\nUse: ${colors.bright}workspace agent run --resume <ID>${colors.reset} para continuar uma sessão.\n`);
+    } catch (err) {
+      console.error(`${colors.red}Erro ao listar sessões: ${err.message}${colors.reset}`);
+    }
+    return;
+  }
+
+  // ── workspace agent session <ID> ──
+  if (subCommand === 'session') {
+    const id = args[1];
+    if (!id) {
+      console.log(`\n${colors.red}Erro: Comando 'session' requer o ID da sessão.${colors.reset}`);
+      console.log(`Uso: workspace agent session <sessionId>\n`);
+      return;
+    }
+    try {
+      const m = await import('../core/agent-loop.js');
+      const s = m.loadSession(id);
+      if (!s) {
+        console.log(`\n${colors.red}Sessão "${id}" não encontrada.${colors.reset}\n`);
+        return;
+      }
+      console.log(`\n${colors.magenta}${colors.bright}🔍 Detalhes da Sessão: ${id}${colors.reset}\n`);
+      console.log(`  ${colors.cyan}Tarefa:${colors.reset}      "${s.task}"`);
+      console.log(`  ${colors.cyan}Status:${colors.reset}      ${s.status}`);
+      console.log(`  ${colors.cyan}Passos:${colors.reset}      ${s.steps_taken}`);
+      console.log(`  ${colors.cyan}Projeto:${colors.reset}     ${s.projectPath}`);
+      console.log(`  ${colors.cyan}Modelo:${colors.reset}      ${s.provider}`);
+      console.log(`  ${colors.cyan}Iniciada:${colors.reset}    ${s.started_at}`);
+      console.log(`  ${colors.cyan}Atualizada:${colors.reset}  ${s.updated_at}`);
+      console.log(`\n${colors.bright}Histórico de Raciocínio (últimos turnos):${colors.reset}\n`);
+      
+      const chatHistory = s.history.filter(h => h.role !== 'system');
+      chatHistory.slice(-6).forEach(h => {
+        if (h.role === 'assistant') {
+          let parsed;
+          try { parsed = JSON.parse(h.content); } catch { parsed = null; }
+          if (parsed) {
+            console.log(`${colors.green}[Agente]${colors.reset} Pensamento: ${parsed.thought}`);
+            console.log(`         Ação: ${parsed.action} params: ${JSON.stringify(parsed.params)}`);
+          } else {
+            console.log(`${colors.green}[Agente]${colors.reset} ${h.content}`);
+          }
+        } else {
+          let preview = h.content;
+          if (preview.length > 300) preview = preview.substring(0, 300) + '...[truncado]';
+          console.log(`${colors.blue}[Usuário/Ferramenta]${colors.reset} ${preview}`);
+        }
+        console.log();
+      });
+    } catch (err) {
+      console.error(`${colors.red}Erro ao carregar sessão: ${err.message}${colors.reset}`);
+    }
+    return;
+  }
+
   const configPath = path.join(WORKSPACE_ROOT, 'configs', 'workspace.json');
   const config = readJsonFile(configPath);
   if (!config) return;
-  
+
   if (!config.agents) {
     config.agents = {};
   }
-  
+
   if (subCommand === 'add') {
     const name = args[1];
     const relativePath = args[2] || `agents/${name}-agent`;
-    
+
     if (!name) {
       console.log(`\n${colors.red}Erro: Comando 'add' requer o nome do agente.${colors.reset}`);
       console.log(`Uso: workspace agent add <nome> [caminho_relativo]\n`);
       return;
     }
-    
+
     config.agents[name] = relativePath;
-    
+
     const agentDir = path.join(WORKSPACE_ROOT, relativePath);
     if (!fs.existsSync(agentDir)) {
       fs.mkdirSync(agentDir, { recursive: true });
     }
-    
+
     const agentMdPath = path.join(agentDir, 'agent.md');
     if (!fs.existsSync(agentMdPath)) {
       const defaultAgentMd = `# Agent ${name.toUpperCase()}
@@ -618,7 +700,7 @@ Defina aqui as instruções específicas para o agente ${name}.
       fs.writeFileSync(agentMdPath, defaultAgentMd, 'utf8');
       console.log(`  ${colors.green}✔ Criado arquivo agent.md em ${relativePath}${colors.reset}`);
     }
-    
+
     if (writeJsonFile(configPath, config)) {
       console.log(`\n${colors.green}✔ Agente "${name}" adicionado às configurações!${colors.reset}\n`);
     }
@@ -629,19 +711,19 @@ Defina aqui as instruções específicas para o agente ${name}.
       console.log(`Uso: workspace agent remove <nome>\n`);
       return;
     }
-    
+
     if (!config.agents[name]) {
       console.log(`${colors.red}Erro: Agente "${name}" não cadastrado.${colors.reset}`);
       return;
     }
-    
+
     delete config.agents[name];
     if (writeJsonFile(configPath, config)) {
       console.log(`\n${colors.green}✔ Agente "${name}" removido das configurações!${colors.reset}\n`);
     }
   } else {
     console.log(`${colors.red}Comando 'agent ${subCommand}' não reconhecido.${colors.reset}`);
-    console.log(`Subcomandos disponíveis: list, add, remove`);
+    console.log(`Subcomandos disponíveis: list, run, chat, sessions, session, add, remove`);
   }
 }
 

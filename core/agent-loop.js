@@ -1,7 +1,14 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { tools, DANGEROUS_ACTIONS, setProjectRoot, getProjectRoot } from './tools.js';
 import { confirmAction } from './safety.js';
 import { buildSystemPrompt } from './prompt-builder.js';
 import { callModel } from './model-router.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+const SESSIONS_DIR = path.resolve(__dirname, '..', 'sessions');
 
 const MAX_STEPS = 30; // permite tarefas mais complexas
 
@@ -20,6 +27,59 @@ const C = {
 };
 
 /**
+ * Salva os dados de uma sessão em arquivo JSON.
+ */
+function saveSession(sessionId, data) {
+  try {
+    if (!fs.existsSync(SESSIONS_DIR)) {
+      fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    }
+    const sessionFilePath = path.join(SESSIONS_DIR, `${sessionId}.json`);
+    fs.writeFileSync(sessionFilePath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error(`${C.red}Erro ao salvar sessão: ${err.message}${C.reset}`);
+  }
+}
+
+/**
+ * Carrega os dados de uma sessão salva.
+ */
+export function loadSession(sessionId) {
+  try {
+    const sessionFilePath = path.join(SESSIONS_DIR, `${sessionId}.json`);
+    if (!fs.existsSync(sessionFilePath)) return null;
+    return JSON.parse(fs.readFileSync(sessionFilePath, 'utf-8'));
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Lista as sessões do agente salvas em disco.
+ */
+export function listSessions() {
+  if (!fs.existsSync(SESSIONS_DIR)) return [];
+  try {
+    const files = fs.readdirSync(SESSIONS_DIR).filter(f => f.endsWith('.json'));
+    return files.map(f => {
+      const p = path.join(SESSIONS_DIR, f);
+      const content = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      return {
+        id: content.id || f.replace('.json', ''),
+        task: content.task,
+        projectPath: content.projectPath,
+        provider: content.provider,
+        status: content.status,
+        steps_taken: content.steps_taken,
+        updated_at: content.updated_at,
+      };
+    });
+  } catch (err) {
+    return [];
+  }
+}
+
+/**
  * Loop ReAct principal do agente de programação.
  *
  * @param {string} taskDescription — Tarefa a executar
@@ -27,41 +87,82 @@ const C = {
  * @param {boolean} opts.autoMode    — true: sem confirmações (todas ações aprovadas automaticamente)
  * @param {string}  opts.projectPath — Caminho do projeto-alvo (default: cwd → .git)
  * @param {string}  opts.provider    — Sobrescreve o provider do model-router (mimo, gemini, deepseek, local...)
+ * @param {string}  opts.resumeSessionId — ID de sessão para retomar a execução
  */
 export async function runAgent(taskDescription, opts = {}) {
-  const { autoMode = false, projectPath, provider } = opts;
+  const { autoMode = false, projectPath, provider, resumeSessionId } = opts;
+  
+  let sessionId = resumeSessionId || `session_${Date.now()}`;
+  let history = [];
+  let startStep = 1;
+  let startedAt = new Date().toISOString();
+  let root = null;
+  let agentProvider = provider || process.env.AGENT_PROVIDER || 'local';
 
-  // Configura o projeto-alvo
-  if (projectPath) {
-    setProjectRoot(projectPath);
+  // Se for uma retomada de sessão
+  if (resumeSessionId) {
+    const saved = loadSession(resumeSessionId);
+    if (!saved) {
+      console.error(`${C.red}❌ Sessão "${resumeSessionId}" não encontrada.${C.reset}`);
+      return { success: false, reason: 'session_not_found' };
+    }
+    taskDescription = saved.task;
+    root = saved.projectPath;
+    setProjectRoot(root);
+    agentProvider = provider || saved.provider;
+    process.env.AGENT_PROVIDER = agentProvider;
+    history = saved.history;
+    startStep = (saved.steps_taken || 0) + 1;
+    startedAt = saved.started_at || startedAt;
+
+    console.log(`\n${C.yellow}${C.bold}♻️  Retomando Sessão do Agente: ${resumeSessionId}${C.reset}`);
+    console.log(`${C.cyan}📋 Retomando a partir do passo:${C.reset} ${startStep}/${MAX_STEPS}`);
+  } else {
+    // Configura o projeto-alvo para nova sessão
+    if (projectPath) {
+      setProjectRoot(projectPath);
+    }
+    root = getProjectRoot();
+    
+    if (provider) {
+      process.env.AGENT_PROVIDER = provider;
+    }
+
+    const systemPrompt = buildSystemPrompt(taskDescription);
+    history = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: taskDescription },
+    ];
+
+    // Salva a sessão inicial no disco
+    const initialSession = {
+      id: sessionId,
+      task: taskDescription,
+      projectPath: root,
+      provider: agentProvider,
+      autoMode,
+      started_at: startedAt,
+      updated_at: new Date().toISOString(),
+      status: 'running',
+      steps_taken: 0,
+      history,
+    };
+    saveSession(sessionId, initialSession);
   }
-  const root = getProjectRoot();
-
-  // Sobrescreve provider se passado
-  if (provider) {
-    process.env.AGENT_PROVIDER = provider;
-  }
-
-  const agentProvider = process.env.AGENT_PROVIDER || 'mimo';
 
   console.log(`\n${C.magenta}${C.bold}╔══════════════════════════════════════════╗${C.reset}`);
   console.log(`${C.magenta}${C.bold}║       🤖 Agente de Programação CLI       ║${C.reset}`);
   console.log(`${C.magenta}${C.bold}╚══════════════════════════════════════════╝${C.reset}`);
+  console.log(`${C.cyan}🆔 Sessão:${C.reset}   ${sessionId}`);
   console.log(`${C.cyan}📁 Projeto:${C.reset}  ${root}`);
   console.log(`${C.cyan}🧠 Modelo:${C.reset}   ${agentProvider}`);
   console.log(`${C.cyan}🔐 Modo:${C.reset}     ${autoMode ? `${C.yellow}AUTO (sem confirmações)${C.reset}` : `${C.green}SEGURO (confirma ações)${C.reset}`}`);
   console.log(`${C.cyan}📋 Tarefa:${C.reset}   ${C.bold}"${taskDescription}"${C.reset}\n`);
 
-  const systemPrompt = buildSystemPrompt(taskDescription);
-  const history = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user',   content: taskDescription },
-  ];
-
   let consecutiveErrors = 0;
   const MAX_CONSECUTIVE_ERRORS = 3;
 
-  for (let step = 1; step <= MAX_STEPS; step++) {
+  for (let step = startStep; step <= MAX_STEPS; step++) {
     console.log(`${C.blue}─────────────────────────────────────────${C.reset}`);
     console.log(`${C.cyan}🔄 Passo ${step}/${MAX_STEPS}${C.reset} ${C.dim}Consultando modelo...${C.reset}`);
 
@@ -73,6 +174,19 @@ export async function runAgent(taskDescription, opts = {}) {
       consecutiveErrors++;
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         console.error(`${C.red}${C.bold}Muitos erros consecutivos. Abortando.${C.reset}`);
+        const finalSession = {
+          id: sessionId,
+          task: taskDescription,
+          projectPath: root,
+          provider: agentProvider,
+          autoMode,
+          started_at: startedAt,
+          updated_at: new Date().toISOString(),
+          status: 'failed',
+          steps_taken: step - 1,
+          history,
+        };
+        saveSession(sessionId, finalSession);
         return { success: false, reason: 'model_error', error: err.message };
       }
       await sleep(2000);
@@ -81,14 +195,11 @@ export async function runAgent(taskDescription, opts = {}) {
 
     // Limpa markdown/blocos de código que o modelo possa ter adicionado
     let cleanRaw = raw.trim();
-    // Remove blocos ```json ... ``` ou ``` ... ```
     const fenceMatch = cleanRaw.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fenceMatch) {
       cleanRaw = fenceMatch[1].trim();
     }
-    // Remove linha de comentário antes do JSON se houver
     cleanRaw = cleanRaw.replace(/^\/\/.*\n/gm, '').trim();
-    // Tenta pegar só o objeto JSON se houver texto antes/depois
     const jsonMatch = cleanRaw.match(/(\{[\s\S]*\})/);
     if (jsonMatch && !cleanRaw.startsWith('{')) {
       cleanRaw = jsonMatch[1];
@@ -105,6 +216,19 @@ export async function runAgent(taskDescription, opts = {}) {
       consecutiveErrors++;
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         console.error(`${C.red}Modelo não conseguiu responder em JSON após ${MAX_CONSECUTIVE_ERRORS} tentativas. Abortando.${C.reset}`);
+        const finalSession = {
+          id: sessionId,
+          task: taskDescription,
+          projectPath: root,
+          provider: agentProvider,
+          autoMode,
+          started_at: startedAt,
+          updated_at: new Date().toISOString(),
+          status: 'failed',
+          steps_taken: step - 1,
+          history,
+        };
+        saveSession(sessionId, finalSession);
         return { success: false, reason: 'json_parse_error' };
       }
       history.push({
@@ -133,6 +257,20 @@ export async function runAgent(taskDescription, opts = {}) {
       console.log(`${C.magenta}${C.bold}║        ✅ Tarefa Concluída!              ║${C.reset}`);
       console.log(`${C.magenta}${C.bold}╚══════════════════════════════════════════╝${C.reset}`);
       console.log(`\n${C.green}${C.bold}Resumo:${C.reset}\n${summary}\n`);
+
+      const finalSession = {
+        id: sessionId,
+        task: taskDescription,
+        projectPath: root,
+        provider: agentProvider,
+        autoMode,
+        started_at: startedAt,
+        updated_at: new Date().toISOString(),
+        status: 'completed',
+        steps_taken: step,
+        history,
+      };
+      saveSession(sessionId, finalSession);
       return { success: true, summary };
     }
 
@@ -197,9 +335,39 @@ export async function runAgent(taskDescription, opts = {}) {
         ? JSON.stringify({ ...result, content: result.content?.substring(0, 4000) + '\n...[truncado]', truncated: true })
         : resultStr
     });
+
+    // Salva o progresso da iteração no disco
+    const stepSession = {
+      id: sessionId,
+      task: taskDescription,
+      projectPath: root,
+      provider: agentProvider,
+      autoMode,
+      started_at: startedAt,
+      updated_at: new Date().toISOString(),
+      status: 'running',
+      steps_taken: step,
+      history,
+    };
+    saveSession(sessionId, stepSession);
   }
 
   console.log(`\n${C.red}${C.bold}⏱️  Limite de ${MAX_STEPS} passos atingido. Abortado por segurança.${C.reset}\n`);
+  
+  const finalSession = {
+    id: sessionId,
+    task: taskDescription,
+    projectPath: root,
+    provider: agentProvider,
+    autoMode,
+    started_at: startedAt,
+    updated_at: new Date().toISOString(),
+    status: 'failed',
+    steps_taken: MAX_STEPS,
+    history,
+  };
+  saveSession(sessionId, finalSession);
+
   return { success: false, reason: 'max_steps' };
 }
 
