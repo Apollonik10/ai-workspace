@@ -452,29 +452,131 @@ function cmdProject(args) {
   }
 }
 
-function cmdAgent(args) {
+async function cmdAgent(args) {
   const subCommand = args[0]?.toLowerCase();
-  
+
   if (!subCommand || subCommand === 'list') {
     cmdAgents();
     return;
   }
 
+  // ── workspace agent run "<tarefa>" [--auto] [--project /caminho] [--provider gemini] ──
   if (subCommand === 'run') {
-    const task = args.slice(1).join(" ");
+    // Extrai flags e monta a tarefa
+    const rawArgs = args.slice(1);
+    let autoMode = false;
+    let projectPath = null;
+    let provider = null;
+    const taskParts = [];
+
+    for (let i = 0; i < rawArgs.length; i++) {
+      if (rawArgs[i] === '--auto' || rawArgs[i] === '-y') {
+        autoMode = true;
+      } else if (rawArgs[i] === '--project' || rawArgs[i] === '-p') {
+        projectPath = rawArgs[++i];
+      } else if (rawArgs[i] === '--provider') {
+        provider = rawArgs[++i];
+      } else {
+        taskParts.push(rawArgs[i]);
+      }
+    }
+
+    const task = taskParts.join(' ');
     if (!task) {
       console.log(`\n${colors.red}Erro: Comando 'run' requer a descrição da tarefa.${colors.reset}`);
-      console.log(`Uso: workspace agent run "<descrição da tarefa>"\n`);
+      console.log(`\nUso:`);
+      console.log(`  workspace agent run "<tarefa>"                    # confirma cada ação`);
+      console.log(`  workspace agent run "<tarefa>" --auto              # aprova tudo automaticamente`);
+      console.log(`  workspace agent run "<tarefa>" --project /caminho  # age em outro projeto`);
+      console.log(`  workspace agent run "<tarefa>" --provider gemini   # usa modelo específico`);
       return;
     }
-    // Importa dinamicamente e executa
-    import('../core/agent-loop.js').then(async (m) => {
-      try {
-        await m.runAgent(task);
-      } catch (err) {
-        console.error(`${colors.red}Erro ao executar o agente: ${err.message}${colors.reset}`);
+
+    try {
+      const m = await import('../core/agent-loop.js');
+      await m.runAgent(task, { autoMode, projectPath, provider });
+    } catch (err) {
+      console.error(`${colors.red}Erro ao executar o agente: ${err.message}${colors.reset}`);
+      if (process.env.DEBUG_AGENT) console.error(err.stack);
+    }
+    return;
+  }
+
+  // ── workspace agent chat [--auto] [--project /caminho] [--provider x] ──
+  // Modo REPL interativo: sessão contínua no terminal
+  if (subCommand === 'chat') {
+    const rawArgs = args.slice(1);
+    let autoMode = false;
+    let projectPath = null;
+    let provider = null;
+
+    for (let i = 0; i < rawArgs.length; i++) {
+      if (rawArgs[i] === '--auto' || rawArgs[i] === '-y') {
+        autoMode = true;
+      } else if (rawArgs[i] === '--project' || rawArgs[i] === '-p') {
+        projectPath = rawArgs[++i];
+      } else if (rawArgs[i] === '--provider') {
+        provider = rawArgs[++i];
       }
-    });
+    }
+
+    const readline = await import('readline');
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+    const agentProvider = provider || process.env.AGENT_PROVIDER || 'mimo';
+    const targetProject = projectPath || process.cwd();
+
+    console.log(`\n${colors.magenta}${colors.bright}╔══════════════════════════════════════════╗${colors.reset}`);
+    console.log(`${colors.magenta}${colors.bright}║     🤖 Agente de Programação — CHAT     ║${colors.reset}`);
+    console.log(`${colors.magenta}${colors.bright}╚══════════════════════════════════════════╝${colors.reset}`);
+    console.log(`${colors.cyan}📁 Projeto:${colors.reset} ${targetProject}`);
+    console.log(`${colors.cyan}🧠 Modelo:${colors.reset}  ${agentProvider}`);
+    console.log(`${colors.cyan}🔐 Modo:${colors.reset}    ${autoMode ? `${colors.yellow}AUTO${colors.reset}` : `${colors.green}SEGURO${colors.reset}`}`);
+    console.log(`\n${colors.dim}Digite uma tarefa e pressione Enter. Digite 'sair' para encerrar.${colors.reset}`);
+    console.log(`${colors.dim}Dica: use --project /caminho para trocar o projeto-alvo durante a sessão.${colors.reset}\n`);
+
+    const askTask = () => {
+      rl.question(`${colors.cyan}${colors.bright}▶ Tarefa:${colors.reset} `, async (input) => {
+        const trimmed = input.trim();
+
+        if (!trimmed || trimmed === 'sair' || trimmed === 'exit' || trimmed === 'quit') {
+          console.log(`\n${colors.green}👋 Encerrando sessão do agente.${colors.reset}\n`);
+          rl.close();
+          return;
+        }
+
+        // Permite trocar projeto na sessão: --project /novo/caminho
+        let task = trimmed;
+        let sessionProject = projectPath;
+        let sessionProvider = provider;
+        const inlineProject = trimmed.match(/--project\s+(\S+)/);
+        const inlineProvider = trimmed.match(/--provider\s+(\S+)/);
+        if (inlineProject) {
+          sessionProject = inlineProject[1];
+          task = trimmed.replace(/--project\s+\S+/, '').trim();
+        }
+        if (inlineProvider) {
+          sessionProvider = inlineProvider[1];
+          task = task.replace(/--provider\s+\S+/, '').trim();
+        }
+
+        try {
+          const m = await import('../core/agent-loop.js');
+          await m.runAgent(task, {
+            autoMode,
+            projectPath: sessionProject,
+            provider: sessionProvider,
+          });
+        } catch (err) {
+          console.error(`${colors.red}Erro: ${err.message}${colors.reset}`);
+        }
+
+        // Próxima rodada
+        setTimeout(askTask, 200);
+      });
+    };
+
+    askTask();
     return;
   }
   
@@ -1115,7 +1217,7 @@ async function main() {
       cmdProject(args.slice(1));
       break;
     case 'agent':
-      cmdAgent(args.slice(1));
+      await cmdAgent(args.slice(1));
       break;
     case 'loop':
       cmdLoop(args.slice(1));
