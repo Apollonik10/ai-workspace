@@ -111,7 +111,7 @@
 - [x] run_command com spawnSync: timeout maior (60s), buffer 4MB, exit_code no retorno
 - [x] System prompt focado em coding agent: workflow git completo, exemplos reais, regras
 - [x] MAX_STEPS aumentado para 30 (permite tarefas mais complexas)
-- [x] AGENT_PROVIDER padrão alterado para `mimo` (usa Gemini/OpenRouter/DeepSeek da nuvem)
+- [x] AGENT_PROVIDER padrão alterado para `local` (Ollama offline/offline por padrão, com mimo opcional)
 - [x] Flag --auto / -y: aprovação automática sem confirmação (modo não-interativo)
 - [x] Flag --project /caminho: age em qualquer projeto do sistema
 - [x] Flag --provider gemini: sobrescreve modelo na chamada
